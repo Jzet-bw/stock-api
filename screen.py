@@ -3,12 +3,13 @@ import yfinance as yf
 
 app = Flask(__name__)
 
+
 @app.route('/screen', methods=['GET'])
 def screen():
     try:
         max_price = float(request.args.get('price', 10000))
-        
-        tickers = ["7203.T", "9984.T", "6758.T", "9432.T"]  # © –{—ˆ‚Í‘S–Á•¿
+
+        tickers = ["7203.T", "9984.T", "6758.T", "9432.T"]  # ï¿½ï¿½ ï¿½{ï¿½ï¿½ï¿½Í‘Sï¿½ï¿½ï¿½ï¿½
         result = []
 
         for code in tickers:
@@ -25,6 +26,7 @@ def screen():
 
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)})
+
 
 if __name__ == '__main__':
     app.run()
