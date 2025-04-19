@@ -11,7 +11,7 @@ def screen():
         max_price = float(request.args.get('price', 10000))
 
         # CSVファイルを読み込み（同じフォルダにあると仮定）
-        df = pd.read_csv("data_j.csv", encoding="cp932")
+        df = pd.read_csv("data_j.csv", encoding="utf-8")
 
         # コードと銘柄名を取得
         tickers = df[['コード', '銘柄名']].dropna().drop_duplicates()
