@@ -1,37 +1,52 @@
 from flask import Flask, request, jsonify
 import yfinance as yf
-import os
+import pandas as pd
 
 app = Flask(__name__)
+
 
 @app.route('/screen', methods=['GET'])
 def screen():
     try:
         max_price = float(request.args.get('price', 10000))
 
-        # 一部の日本株を例示（本番ではもっと多く取得可能）
-        tickers = ["7203.T", "9984.T", "6758.T", "9432.T"]
-        result = []
+        # CSVファイルを読み込み（同じフォルダにあると仮定）
+        df = pd.read_csv("data_j.csv", encoding="cp932")
 
-        for code in tickers:
-            data = yf.Ticker(code)
-            hist = data.history(period="1d")
-            if hist.empty:
+        # コードと銘柄名を取得
+        tickers = df[['コード', '銘柄名']].dropna().drop_duplicates()
+
+        results = []
+
+        for index, row in tickers.iterrows():
+            code = str(row['コード']).zfill(4) + ".T"
+            name = row['銘柄名']
+
+            try:
+                data = yf.Ticker(code)
+                hist = data.history(period="1d")
+
+                if hist.empty:
+                    continue
+
+                price = hist['Close'].iloc[-1]
+
+                if price <= max_price:
+                    results.append({
+                        "code": code,
+                        "name": name,
+                        "price": round(price, 2)
+                    })
+
+            except Exception as e:
+                print(f"Error processing {code}: {e}")
                 continue
 
-            price = hist['Close'].iloc[-1]
-
-            if price <= max_price:
-                result.append({
-                    "code": code,
-                    "price": round(price, 2)
-                })
-
-        return jsonify({"status": "ok", "results": result})
+        return jsonify({"status": "ok", "results": results})
 
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)})
 
+
 if __name__ == '__main__':
-    port = int(os.environ.get("PORT", 5000))  # Renderで必要
-    app.run(host="0.0.0.0", port=port)
+    app.run(host="0.0.0.0", port=5000)
