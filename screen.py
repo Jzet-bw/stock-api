@@ -41,24 +41,25 @@ def screen():
         # ゴールデンクロス判定（5日 > 25日）
         df['GC'] = df['株価移動平均線乖離率(5日)'] > df['株価移動平均線乖離率(25日)']
 
-        # フィルタリング条件（スイングトレードに向いてそうな条件）
+        # スクリーニング条件（スイングトレード向け）
         filtered = df[
             (df['現在値'] <= max_price) &
             (df['RSI(%)'] < 50) &
             (df['株価移動平均線乖離率(5日)'].abs() < 10) &
             (df['過去60日ボラティリティ(%)'] < 30) &
-            (df['ボリンジャーバンド'].abs() > 1.5) &         # ボリンジャーバンドの幅が小さい銘柄
+            (df['ボリンジャーバンド'].abs() > 1.5) &
             (df['GC'] == True)
         ]
 
         print(f"▶ スクリーニング結果: {len(filtered)}件")
 
-        # JSON形式で結果を返却
+        # 結果をJSON形式で整形
         results = []
         for _, row in filtered.iterrows():
             results.append({
                 "code": str(row['コード']),
                 "name": row['銘柄名'],
+                "market": row['市場'],  # ← 追加された市場情報
                 "price": row['現在値'],
                 "rsi": row['RSI(%)'],
                 "volatility": row['過去60日ボラティリティ(%)'],
@@ -73,6 +74,7 @@ def screen():
     except Exception as e:
         traceback.print_exc()
         return jsonify({"status": "error", "message": str(e)}), 500
+
 
 # ローカル実行用
 if __name__ == '__main__':
