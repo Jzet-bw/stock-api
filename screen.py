@@ -1,36 +1,40 @@
 from flask import Flask, request, jsonify
 import pandas as pd
+import traceback
 
 app = Flask(__name__)
 
 @app.route('/screen', methods=['GET'])
 def screen():
     try:
-        # クエリから最大株価を取得（デフォルトは10000）
         max_price = float(request.args.get('price', 10000))
+        print(f"▶ 受け取った max_price: {max_price}")
 
-        # CSVファイルの読み込み（同一ディレクトリに data.csv がある前提）
-        df = pd.read_csv("data.csv", encoding="utf-8")
+        # CSV ファイル読み込み（同一ディレクトリに data.csv を置いてください）
+        df = pd.read_csv("data.csv", encoding="utf-8")  # 文字化けするなら cp932 に変更
 
-        # 欠損値を含む行を削除
-        df = df.dropna(subset=[
-            '現在値', 'RSI(%)', '過去60日ボラティリティ(%)', '株価移動平均線乖離率(%)',
-            '5日移動平均', '25日移動平均'
-        ])
+        print(f"▶ CSV 読み込み成功。行数: {len(df)}")
 
-        # ゴールデンクロス判定: 5日移動平均 > 25日移動平均
-        df['ゴールデンクロス'] = df['5日移動平均'] > df['25日移動平均']
+        # 必須列があるか確認
+        required_cols = ['コード', '銘柄名', '市場', '現在値', 'RSI(%)', '株価移動平均線乖離率(%)', '過去60日ボラティリティ(%)']
+        for col in required_cols:
+            if col not in df.columns:
+                raise ValueError(f"必要なカラムが見つかりません: {col}")
 
-        # フィルタ条件の適用（ここでチューニング可能）
+        # NaN削除 & float変換
+        df = df.dropna(subset=['現在値', 'RSI(%)', '株価移動平均線乖離率(%)', '過去60日ボラティリティ(%)'])
+        df['現在値'] = df['現在値'].astype(float)
+
+        # フィルタリング条件（スイングトレード向け）
         filtered = df[
             (df['現在値'] <= max_price) &
-            (df['RSI(%)'] < 65) &
-            (df['過去60日ボラティリティ(%)'] < 40) &
-            (df['株価移動平均線乖離率(%)'].abs() < 15) &
-            (df['ゴールデンクロス'] == True)
+            (df['RSI(%)'] < 70) &
+            (df['株価移動平均線乖離率(%)'].abs() < 10) &
+            (df['過去60日ボラティリティ(%)'] < 50)
         ]
 
-        # 結果の整形
+        print(f"▶ フィルタ後: {len(filtered)}件")
+
         results = []
         for _, row in filtered.iterrows():
             results.append({
@@ -39,14 +43,15 @@ def screen():
                 "price": row['現在値'],
                 "rsi": row['RSI(%)'],
                 "volatility": row['過去60日ボラティリティ(%)'],
-                "maDisparity": row['株価移動平均線乖離率(%)'],
-                "goldenCross": row['ゴールデンクロス']
+                "ma_disparity": row['株価移動平均線乖離率(%)']
             })
 
         return jsonify({"status": "ok", "results": results})
 
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e)})
+        # ログ出力
+        traceback.print_exc()
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 if __name__ == '__main__':
     app.run(host="0.0.0.0", port=5000)
