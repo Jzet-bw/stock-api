@@ -1,57 +1,53 @@
 from flask import Flask, request, jsonify
 import pandas as pd
-import traceback
 
 app = Flask(__name__)
 
 @app.route('/screen', methods=['GET'])
 def screen():
     try:
-        max_price = float(request.args.get('price', 10000))
-        print(f"▶ 受け取った max_price: {max_price}")
+        # クエリパラメータで価格上限を取得（デフォルト: 2000円）
+        max_price = float(request.args.get('price', 2000))
 
-        # CSV ファイル読み込み（同一ディレクトリに data.csv を置いてください）
-        df = pd.read_csv("data.csv", encoding="utf-8")  # 文字化けするなら cp932 に変更
+        # CSVファイル読み込み（同じフォルダ内）
+        df = pd.read_csv('priced_data.csv', encoding='utf-8')
 
-        print(f"▶ CSV 読み込み成功。行数: {len(df)}")
+        # 欠損値のある行を除外
+        df = df.dropna(subset=[
+            '現在値', 'RSI(%)', '過去60日ボラティリティ(%)',
+            '株価移動平均線(5日)', '株価移動平均線(25日)'
+        ])
 
-        # 必須列があるか確認
-        required_cols = ['コード', '銘柄名', '市場', '現在値', 'RSI(%)', '株価移動平均線乖離率(%)', '過去60日ボラティリティ(%)']
-        for col in required_cols:
-            if col not in df.columns:
-                raise ValueError(f"必要なカラムが見つかりません: {col}")
+        # 型変換
+        df['現在値'] = pd.to_numeric(df['現在値'], errors='coerce')
+        df['RSI(%)'] = pd.to_numeric(df['RSI(%)'], errors='coerce')
+        df['過去60日ボラティリティ(%)'] = pd.to_numeric(df['過去60日ボラティリティ(%)'], errors='coerce')
+        df['株価移動平均線(5日)'] = pd.to_numeric(df['株価移動平均線(5日)'], errors='coerce')
+        df['株価移動平均線(25日)'] = pd.to_numeric(df['株価移動平均線(25日)'], errors='coerce')
 
-        # NaN削除 & float変換
-        df = df.dropna(subset=['現在値', 'RSI(%)', '株価移動平均線乖離率(%)', '過去60日ボラティリティ(%)'])
-        df['現在値'] = df['現在値'].astype(float)
+        # ゴールデンクロス判定
+        df['GC'] = df['株価移動平均線(5日)'] > df['株価移動平均線(25日)']
 
-        # フィルタリング条件（スイングトレード向け）
+        # フィルタ条件
         filtered = df[
             (df['現在値'] <= max_price) &
-            (df['RSI(%)'] < 70) &
-            (df['株価移動平均線乖離率(%)'].abs() < 10) &
-            (df['過去60日ボラティリティ(%)'] < 50)
+            (df['RSI(%)'] >= 40) & (df['RSI(%)'] <= 60) &
+            (df['過去60日ボラティリティ(%)'] <= 5) &
+            (df['GC'] == True)
         ]
 
-        print(f"▶ フィルタ後: {len(filtered)}件")
+        # 必要な列だけ抽出して JSON 形式で返す
+        result = filtered[['コード', '銘柄名', '現在値', 'RSI(%)', '過去60日ボラティリティ(%)', 'GC']].head(20)
 
-        results = []
-        for _, row in filtered.iterrows():
-            results.append({
-                "code": str(row['コード']),
-                "name": row['銘柄名'],
-                "price": row['現在値'],
-                "rsi": row['RSI(%)'],
-                "volatility": row['過去60日ボラティリティ(%)'],
-                "ma_disparity": row['株価移動平均線乖離率(%)']
-            })
-
-        return jsonify({"status": "ok", "results": results})
+        return jsonify({
+            "status": "ok",
+            "count": len(result),
+            "results": result.to_dict(orient='records')
+        })
 
     except Exception as e:
-        # ログ出力
-        traceback.print_exc()
-        return jsonify({"status": "error", "message": str(e)}), 500
+        return jsonify({"status": "error", "message": str(e)})
+
 
 if __name__ == '__main__':
-    app.run(host="0.0.0.0", port=5000)
+    app.run(host='0.0.0.0', port=5000)
