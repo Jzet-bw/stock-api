@@ -19,38 +19,41 @@ def screen():
         df.columns.values[7] = '株価移動平均線乖離率(5日)'
         df.columns.values[8] = '株価移動平均線乖離率(25日)'
 
-        # 必須列が存在するか確認
+        # 必須列確認
         required_cols = [
             'コード', '銘柄名', '市場', '現在値',
             'RSI(%)', '株価移動平均線乖離率(5日)',
-            '株価移動平均線乖離率(25日)', '過去60日ボラティリティ(%)'
+            '株価移動平均線乖離率(25日)', '過去60日ボラティリティ(%)', 'ボリンジャーバンド'
         ]
         for col in required_cols:
             if col not in df.columns:
                 raise ValueError(f"必要なカラムが見つかりません: {col}")
 
-        # NaN除去 & 型変換
+        # NaN削除 & 型変換
         df = df.dropna(subset=required_cols)
         df['現在値'] = df['現在値'].astype(float)
         df['RSI(%)'] = df['RSI(%)'].astype(float)
         df['株価移動平均線乖離率(5日)'] = df['株価移動平均線乖離率(5日)'].astype(float)
         df['株価移動平均線乖離率(25日)'] = df['株価移動平均線乖離率(25日)'].astype(float)
         df['過去60日ボラティリティ(%)'] = df['過去60日ボラティリティ(%)'].astype(float)
+        df['ボリンジャーバンド'] = df['ボリンジャーバンド'].astype(float)
 
-        # ゴールデンクロス判定列の追加（5日 > 25日）
+        # ゴールデンクロス判定（5日 > 25日）
         df['GC'] = df['株価移動平均線乖離率(5日)'] > df['株価移動平均線乖離率(25日)']
 
-        # スクリーニング条件（より厳しく）
+        # フィルタリング条件（スイングトレードに向いてそうな条件）
         filtered = df[
             (df['現在値'] <= max_price) &
-            (df['RSI(%)'] < 50) &                            # RSI条件（より厳しく）
+            (df['RSI(%)'] < 50) &
             (df['株価移動平均線乖離率(5日)'].abs() < 10) &
-            (df['過去60日ボラティリティ(%)'] < 30) &      # ボラティリティ条件（より厳しく）
-            (df['GC'] == True)                               # GCがTrueのみ
+            (df['過去60日ボラティリティ(%)'] < 30) &
+            (df['ボリンジャーバンド'] < 10) &         # ボリンジャーバンドの幅が小さい銘柄
+            (df['GC'] == True)
         ]
 
         print(f"▶ スクリーニング結果: {len(filtered)}件")
 
+        # JSON形式で結果を返却
         results = []
         for _, row in filtered.iterrows():
             results.append({
@@ -61,6 +64,7 @@ def screen():
                 "volatility": row['過去60日ボラティリティ(%)'],
                 "ma5_disparity": row['株価移動平均線乖離率(5日)'],
                 "ma25_disparity": row['株価移動平均線乖離率(25日)'],
+                "bb_width": row['ボリンジャーバンド'],
                 "gc": row['GC']
             })
 
@@ -70,6 +74,6 @@ def screen():
         traceback.print_exc()
         return jsonify({"status": "error", "message": str(e)}), 500
 
-# ローカルで実行
+# ローカル実行用
 if __name__ == '__main__':
     app.run(host="0.0.0.0", port=5000)
