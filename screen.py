@@ -10,7 +10,7 @@ def screen():
         max_price = float(request.args.get('price', 10000))
         print(f"▶ 受け取った max_price: {max_price}")
 
-        df = pd.read_csv("data.csv", encoding="utf-8")
+        df = pd.read_csv("dataG.csv", encoding="utf-8")
         print(f"▶ CSV 読み込み成功。行数: {len(df)}")
 
         # 列名調整（8列目と9列目が5日・25日移動平均乖離）
