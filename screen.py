@@ -63,5 +63,26 @@ def screen():
         traceback.print_exc()
         return jsonify({"status": "error", "message": str(e)}), 500
 
+@app.route("/lookup")
+def lookup():
+    symbol = request.args.get("symbol")  # 例: 7203.T
+    if not symbol:
+        return jsonify({"status": "error", "message": "symbol is required"}), 400
+    print(symbol)
+    # .Tを削除してコード番号のみ取得
+    code = symbol.replace(".T", "")  # "7203.T" → "7203"
+    print(code)
+    try:
+        df = pd.read_csv("data.csv", encoding="utf-8")
+        row = df[df["コード"] == code]  # 「コード」列は ".T" なしの数字
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+    if row.empty:
+        return jsonify({"status": "not_found", "name": ""})
+
+    name = row.iloc[0]["銘柄名"]
+    return jsonify({"status": "ok", "name": name})
+
 if __name__ == '__main__':
     app.run(host="0.0.0.0", port=5000)
