@@ -84,5 +84,15 @@ def lookup():
     name = row.iloc[0]["銘柄名"]
     return jsonify({"status": "ok", "name": name})
 
+@app.route('/search_name', methods=['GET'])
+def search_name():
+    keyword = request.args.get('keyword', '')
+    df = pd.read_csv("data.csv", encoding="utf-8")
+    matched = df[df['銘柄名'].str.contains(keyword, na=False)]
+    if matched.empty:
+        return jsonify({"status": "not_found", "results": []})
+    results = matched[['コード', '銘柄名']].to_dict(orient='records')
+    return jsonify({"status": "ok", "results": results})
+
 if __name__ == '__main__':
     app.run(host="0.0.0.0", port=5000)
