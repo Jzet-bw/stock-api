@@ -65,34 +65,78 @@ def screen():
 
 @app.route("/lookup")
 def lookup():
-    symbol = request.args.get("symbol")  # 例: 7203.T
+    symbol = request.args.get("symbol")
     if not symbol:
         return jsonify({"status": "error", "message": "symbol is required"}), 400
-    print(symbol)
-    # .Tを削除してコード番号のみ取得
+
     code = symbol.replace(".T", "")  # "7203.T" → "7203"
-    print(code)
     try:
         df = pd.read_csv("data.csv", encoding="utf-8")
-        row = df[df["コード"] == code]  # 「コード」列は ".T" なしの数字
+
+        row = df[df["コード"].astype(str) == code]
+        if row.empty:
+            return jsonify({"status": "not_found", "name": ""})
+
+        row = row.iloc[0]
+
+        result = {
+            "status": "ok",
+            "name": row["銘柄名"],
+            "rsi": float(row["RSI(%)"]),
+            "ma5_disparity": float(row["株価移動平均線乖離率(%)"]),     # ← 正しい列名
+            "ma25_disparity": float(row["株価移動平均線乖離率(%).1"]),  # ← 正しい列名
+            "volatility": float(row["過去60日ボラティリティ(%)"]),
+            "bb_width": float(row["ボリンジャーバンド"])
+        }
+
+        return jsonify(result)
+
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return jsonify({"status": "error", "message": str(e)}), 500
-
-    if row.empty:
-        return jsonify({"status": "not_found", "name": ""})
-
-    name = row.iloc[0]["銘柄名"]
-    return jsonify({"status": "ok", "name": name})
 
 @app.route('/search_name', methods=['GET'])
 def search_name():
     keyword = request.args.get('keyword', '')
     df = pd.read_csv("data.csv", encoding="utf-8")
+
     matched = df[df['銘柄名'].str.contains(keyword, na=False)]
     if matched.empty:
         return jsonify({"status": "not_found", "results": []})
-    results = matched[['コード', '銘柄名']].to_dict(orient='records')
-    return jsonify({"status": "ok", "results": results})
 
+    # 列の正確な対応
+    required_cols = [
+        'コード', '銘柄名',
+        'RSI(%)',
+        '株価移動平均線乖離率(%)',
+        '株価移動平均線乖離率(%).1',
+        '過去60日ボラティリティ(%)',
+        'ボリンジャーバンド'
+    ]
+    for col in required_cols:
+        if col not in matched.columns:
+            return jsonify({"status": "error", "message": f"列 {col} が見つかりません"}), 500
+
+    matched = matched.dropna(subset=required_cols)
+    matched['RSI(%)'] = matched['RSI(%)'].astype(float)
+    matched['株価移動平均線乖離率(%)'] = matched['株価移動平均線乖離率(%)'].astype(float)
+    matched['株価移動平均線乖離率(%).1'] = matched['株価移動平均線乖離率(%).1'].astype(float)
+    matched['過去60日ボラティリティ(%)'] = matched['過去60日ボラティリティ(%)'].astype(float)
+    matched['ボリンジャーバンド'] = matched['ボリンジャーバンド'].astype(float)
+
+    results = []
+    for _, row in matched.iterrows():
+        results.append({
+            "コード": str(row['コード']),
+            "銘柄名": row['銘柄名'],
+            "rsi": row['RSI(%)'],
+            "ma5_disparity": row['株価移動平均線乖離率(%)'],
+            "ma25_disparity": row['株価移動平均線乖離率(%).1'],
+            "volatility": row['過去60日ボラティリティ(%)'],
+            "bb_width": row['ボリンジャーバンド']
+        })
+
+    return jsonify({"status": "ok", "results": results})
 if __name__ == '__main__':
     app.run(host="0.0.0.0", port=5000)
